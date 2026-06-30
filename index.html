@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0d0d1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Belly Ball">
+  <link rel="manifest" href="manifest.json">
   <title>🐾 Belly Ball</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -48,6 +53,44 @@
     #ctrl-hint { margin-top:5px; color:#333; font-size:.68rem; letter-spacing:.07em; text-align:center; }
     #reset-btn { position:absolute; top:8px; right:8px; padding:5px 12px; border:1px solid #2a2a4a; border-radius:50px; font-size:.65rem; font-weight:600; cursor:pointer; background:rgba(13,13,26,.75); color:#444; letter-spacing:.08em; transition:color .15s,border-color .15s; z-index:10; }
     #reset-btn:hover { color:#f07178; border-color:#f07178; }
+    /* ── Mobile / responsive ── */
+    #game-wrap { width: 100%; max-width: 1100px; }
+    canvas { width: 100%; height: auto; touch-action: none; }
+    #touch-p1-zone, #touch-p2-zone {
+      position: absolute; top: 0; bottom: 0; width: 50%;
+      display: none; /* shown only during active game via JS */
+      align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    #touch-p1-zone { left: 0; }
+    #touch-p2-zone { right: 0; }
+    .touch-label {
+      font-size: .65rem; letter-spacing: .12em; color: rgba(255,255,255,.12);
+      text-transform: uppercase; writing-mode: vertical-rl;
+    }
+    #portrait-warn {
+      display: none; position: fixed; inset: 0; z-index: 999;
+      background: #0d0d1a; color: #aaa;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; font-size: 1rem; text-align: center; padding: 24px;
+    }
+    #portrait-warn .big { font-size: 3rem; }
+    @media (max-width: 600px) {
+      h1 { font-size: 1.3rem; margin-bottom: 4px; }
+      #scoreboard { gap: 24px; margin-bottom: 4px; }
+      .score-value { font-size: 2rem; }
+      .avatar-chip img { width: 24px; height: 24px; }
+      .chip-name { font-size: .6rem; }
+      .av-opt { width: 40px; height: 40px; }
+      .av-name { width: 44px; font-size: .5rem; }
+      .avatar-grid { max-width: 260px; gap: 5px; }
+      #speed-bar-wrap { font-size: .6rem; }
+      #ctrl-hint { font-size: .6rem; }
+      #overlay h2 { font-size: 1.2rem; }
+      #overlay p { font-size: .75rem; }
+      .play-btn, .ghost-btn { padding: 9px 22px; font-size: .82rem; }
+      .tog-btn, .diff-btn { padding: 6px 12px; font-size: .75rem; }
+    }
   </style>
 </head>
 <body>
@@ -63,9 +106,12 @@
     <div class="score-label" id="p2-label">AI</div><div class="score-value" id="p2-score">0</div>
   </div>
 </div>
+<div id="portrait-warn"><div class="big">📱↔️</div><div>Rotate your device to landscape for the best experience!</div></div>
 <div id="game-wrap">
   <canvas id="c" width="1100" height="650"></canvas>
   <div id="overlay"></div>
+  <div id="touch-p1-zone"><span class="touch-label">slide to move</span></div>
+  <div id="touch-p2-zone"><span class="touch-label">slide to move</span></div>
   <button id="reset-btn" title="Reset game">↺ RESET</button>
 </div>
 <div id="speed-bar-wrap">SPEED <div id="speed-bar-bg"><div id="speed-bar-fill"></div></div><span id="speed-label">–</span></div>
@@ -168,6 +214,7 @@ function selectAvatar(whom, id) {
 function setMode(m) {
   mode = m;
   if (mode === '1p') p2AvatarId = BOOGEY_ID;
+  updateControlHint();
   buildMenu();
 }
 
@@ -646,11 +693,136 @@ function draw() {
   ctx.textAlign='right'; ctx.fillText(a2?a2.name:'AI', W-22, 20);
 }
 
+
+// ── RESPONSIVE CANVAS SCALING ───────────────────────────────────────────────
+function getCanvasScale() {
+  var rect = canvas.getBoundingClientRect();
+  return { sx: W / rect.width, sy: H / rect.height };
+}
+
+// ── DEVICE DETECTION ─────────────────────────────────────────────────────────
+var isMobile = (function() {
+  return ('ontouchstart' in window) ||
+    (navigator.maxTouchPoints > 0) ||
+    /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+})();
+
+function updateControlHint() {
+  var hint = document.getElementById('ctrl-hint');
+  if (isMobile) {
+    hint.textContent = mode === '2p'
+      ? 'P1: slide left side  |  P2: slide right side'
+      : 'Slide anywhere to move your paddle';
+  } else {
+    hint.textContent = 'P1: W / S  |  P2 (2-player): ↑ / ↓';
+  }
+}
+
+function checkOrientation() {
+  var warn = document.getElementById('portrait-warn');
+  var isPortrait = window.innerHeight > window.innerWidth;
+  // Only show portrait warning on actual mobile/touch devices
+  warn.style.display = (isMobile && isPortrait) ? 'flex' : 'none';
+}
+window.addEventListener('resize', function() { checkOrientation(); updateControlHint(); });
+window.addEventListener('orientationchange', function() {
+  setTimeout(function() { checkOrientation(); updateControlHint(); }, 200);
+});
+checkOrientation();
+updateControlHint();
+
+// ── TOUCH CONTROLS ───────────────────────────────────────────────────────────
+var touches = {}; // track active touch IDs
+
+function getTouchY(touch) {
+  var rect = canvas.getBoundingClientRect();
+  var scale = H / rect.height;
+  return (touch.clientY - rect.top) * scale;
+}
+function getTouchX(touch) {
+  var rect = canvas.getBoundingClientRect();
+  return touch.clientX - rect.left;
+}
+
+function showTouchZones(show) {
+  document.getElementById('touch-p1-zone').style.display = show ? 'flex' : 'none';
+  document.getElementById('touch-p2-zone').style.display = (show && mode === '2p') ? 'flex' : 'none';
+}
+
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  if (!state.running) return;
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    touches[t.identifier] = { x: getTouchX(t), y: getTouchY(t) };
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  if (!state.running) return;
+  var rect = canvas.getBoundingClientRect();
+  var halfW = rect.width / 2;
+
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    var t = e.changedTouches[i];
+    var newY = getTouchY(t);
+    var touchX = getTouchX(t);
+    var prev = touches[t.identifier];
+    if (!prev) { touches[t.identifier] = { x: touchX, y: newY }; continue; }
+
+    var dy = newY - prev.y;
+    touches[t.identifier] = { x: touchX, y: newY };
+
+    if (mode === '1p') {
+      // Any touch moves P1
+      state.p1.y = Math.max(0, Math.min(H - PADDLE_H, state.p1.y + dy));
+    } else {
+      // Left half = P1, right half = P2
+      if (touchX < halfW) {
+        state.p1.y = Math.max(0, Math.min(H - PADDLE_H, state.p1.y + dy));
+      } else {
+        state.p2.y = Math.max(0, Math.min(H - PADDLE_H, state.p2.y + dy));
+      }
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  for (var i = 0; i < e.changedTouches.length; i++) {
+    delete touches[e.changedTouches[i].identifier];
+  }
+}, { passive: false });
+
+// Show/hide touch zones based on game state
+var _origStartGame = startGame;
+startGame = function() {
+  _origStartGame();
+  showTouchZones(true);
+};
+var _origBuildMenu = buildMenu;
+buildMenu = function() {
+  _origBuildMenu();
+  showTouchZones(false);
+};
+
 // Boot
 p2AvatarId = BOOGEY_ID;
 buildMenu();
 catBallImg.onload = function() { draw(); };
 draw();
+
+// ── SERVICE WORKER REGISTRATION ──────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('sw.js').then(function(reg) {
+      console.log('SW registered:', reg.scope);
+    }).catch(function(err) {
+      console.log('SW registration failed:', err);
+    });
+  });
+}
 
 // Reset button — always visible, kicks back to menu and kills any running loop
 document.getElementById('reset-btn').addEventListener('click', function() {
